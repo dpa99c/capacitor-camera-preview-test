@@ -280,10 +280,6 @@ ion-title {
       width: var(--preview-size);
       margin-left: auto;
       margin-right: auto;
-      border: 1px solid var(--ion-color-primary);
-      &.placeholder{
-        border-radius: var(--clamped-p-font-size);
-      }
     }
 
     .text{
