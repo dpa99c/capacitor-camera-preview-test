@@ -2,7 +2,8 @@
 import {onMounted, ref, watch} from "vue";
 import {IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonIcon} from '@ionic/vue';
 import {CameraPreview, CameraPreviewOptions} from '@capacitor-community/camera-preview';
-import {camera, close} from 'ionicons/icons';
+import {camera, close, refresh} from 'ionicons/icons';
+import {as} from "vitest/dist/reporters-5f784f42";
 
 // Internal variables
 const IMAGE_QUALITY = 85;
@@ -27,6 +28,15 @@ const unsetNoCameraAvailable = () => {
   canTakePhoto.value = true;
   cameraText.value = ''
   cameraTextClass.value = ''
+}
+
+const onPressFlip = async () => {
+  try {
+    await CameraPreview.flip();
+  } catch (e: any) {
+    const errorMessage = e.message;
+    console.error(`Error flipping camera: ${errorMessage}`);
+  }
 }
 
 const onTakePhoto = async (imageSrc: string) => {
@@ -163,8 +173,15 @@ const onRejectPhoto = async () => {
   startCameraPreview();
 }
 
-onMounted(() => {
+onMounted(async () => {
   startCameraPreview();
+
+  try{
+    const cameraCharacteristics = await CameraPreview.getCameraCharacteristics();
+    console.dir(cameraCharacteristics);
+  }catch (e: any) {
+    console.error(`Error getting camera characteristics: ${e.message}`);
+  }
 })
 </script>
 
@@ -190,9 +207,13 @@ onMounted(() => {
 
           <p class="text" v-if="cameraText" v-html="cameraText" :class="cameraTextClass"></p>
           <div class="buttons">
-            <ion-button :disabled="!canTakePhoto" @click="onPressTakePhoto()" class="w-50">
+            <ion-button :disabled="!canTakePhoto" @click="onPressTakePhoto()">
               <ion-icon slot="end" :icon="camera" size="large"/>
               <span>Take photo</span>
+            </ion-button>
+            <ion-button :disabled="!canTakePhoto" @click="onPressFlip()">
+              <ion-icon slot="end" :icon="refresh" size="large"/>
+              <span>Flip camera</span>
             </ion-button>
           </div>
         </div>
@@ -289,6 +310,7 @@ ion-title {
 
   .buttons {
     display: flex;
+    flex-direction: column;
     justify-content: space-around;
     align-items: center;
     margin-top: var(--clamped-p-font-size);
