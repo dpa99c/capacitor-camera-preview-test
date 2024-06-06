@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import {onMounted, ref, watch} from "vue";
-import {IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonIcon} from '@ionic/vue';
+import {IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonIcon, IonRange} from '@ionic/vue';
 import {CameraPreview, CameraPreviewOptions} from '@capacitor-community/camera-preview';
-import {camera, close, refresh} from 'ionicons/icons';
-import {as} from "vitest/dist/reporters-5f784f42";
+import {addCircleOutline, camera, close, refresh, removeCircleOutline} from 'ionicons/icons';
 
 // Internal variables
 const IMAGE_QUALITY = 85;
 const photoSelector = '#photo .image';
+const zoomStep = 10;
 
 // Refs
 const previewStarted = ref(false)
@@ -16,6 +16,9 @@ const cameraText = ref('')
 const cameraTextClass = ref('')
 const imageSrcData = ref('')
 const imageLoadingHeight = ref(0);
+const maxZoom = ref(100)
+const currentZoom = ref(0)
+const zoomRangeRef = ref()
 
 
 const setNoCameraAvailable = (reason: string) => {
@@ -95,6 +98,13 @@ const _startCameraPreview = async () => {
   try {
     unsetNoCameraAvailable();
     await CameraPreview.start(cameraPreviewOptions);
+
+    const _maxZoom = await CameraPreview.getMaxZoom();
+    maxZoom.value = typeof _maxZoom === 'number' ? _maxZoom : _maxZoom.value;
+
+    const _currentZoom = await CameraPreview.getZoom();
+    currentZoom.value = typeof _currentZoom === 'number' ? _currentZoom : _currentZoom.value;
+
     document.documentElement.classList.add('camera-preview');
     previewStarted.value = true;
   } catch (e: any) {
@@ -161,6 +171,19 @@ const waitForPhotoToRender = () => {
   requestAnimationFrame(waitForPhotoToRender);
 }
 
+const onChangeZoom = (zoom:number) => {
+  CameraPreview.setZoom({zoom: zoom});
+}
+
+// TODO either fix this so it updates the range slider or remove it
+const onTapZoomOut = () => {
+  currentZoom.value = Math.max(0, currentZoom.value - zoomStep);
+}
+
+const onTapZoomIn = () => {
+  currentZoom.value = Math.min(maxZoom.value, currentZoom.value + zoomStep);
+}
+
 watch(imageSrcData, (value: string) => {
   if (value) {
     imageLoadingHeight.value = 0;
@@ -168,10 +191,16 @@ watch(imageSrcData, (value: string) => {
   }
 })
 
+watch(currentZoom, (value: number) => {
+  console.log('Zoom changed to', value);
+  onChangeZoom(value);
+})
+
 const onRejectPhoto = async () => {
   imageSrcData.value = '';
   startCameraPreview();
 }
+
 
 onMounted(async () => {
   startCameraPreview();
@@ -216,6 +245,16 @@ onMounted(async () => {
               <span>Flip camera</span>
             </ion-button>
           </div>
+
+          <ion-range
+              v-model="currentZoom"
+              ref="zoomRangeRef"
+              aria-label="Camera zoom level"
+              :max="maxZoom"
+          >
+            <ion-icon @click="onTapZoomOut()" slot="start" :icon="removeCircleOutline" color="primary"></ion-icon>
+            <ion-icon @click="onTapZoomIn()" slot="end" :icon="addCircleOutline" color="primary"></ion-icon>
+          </ion-range>
         </div>
 
         <div class="photo-layout" v-else>
@@ -290,6 +329,9 @@ ion-title {
       &.danger {
         color: var(--ion-color-danger);
       }
+    }
+    ion-range{
+      padding: 20px;
     }
   }
 
