@@ -7,7 +7,8 @@ import {addCircleOutline, camera, close, refresh, removeCircleOutline} from 'ion
 // Internal variables
 const IMAGE_QUALITY = 85;
 const photoSelector = '#photo .image';
-const zoomStep = 10;
+const ZOOM_STEPS = 10;
+const MIN_ZOOM = 1;
 
 // Refs
 const previewStarted = ref(false)
@@ -16,9 +17,10 @@ const cameraText = ref('')
 const cameraTextClass = ref('')
 const imageSrcData = ref('')
 const imageLoadingHeight = ref(0);
-const maxZoom = ref(100)
+const maxZoom = ref(0)
 const currentZoom = ref(0)
 const zoomRangeRef = ref()
+const zoomStep = ref();
 
 
 const setNoCameraAvailable = (reason: string) => {
@@ -91,19 +93,25 @@ const _startCameraPreview = async () => {
     enableZoom: true,
     toBack: false,
     storeToFile: false,
-    lockAndroidOrientation: true,
-    disableAudio: true,
+    lockAndroidOrientation: false,
+    disableExifHeaderStripping: false,
   }
 
   try {
     unsetNoCameraAvailable();
+
+    // make sure it's stopped before starting
+    try{await CameraPreview.stop();} catch(e){}
+
     await CameraPreview.start(cameraPreviewOptions);
 
     const _maxZoom = await CameraPreview.getMaxZoom();
-    maxZoom.value = typeof _maxZoom === 'number' ? _maxZoom : _maxZoom.value;
+    maxZoom.value = _maxZoom.value;
+
+    zoomStep.value = maxZoom.value / ZOOM_STEPS;
 
     const _currentZoom = await CameraPreview.getZoom();
-    currentZoom.value = typeof _currentZoom === 'number' ? _currentZoom : _currentZoom.value;
+    currentZoom.value = _currentZoom.value;
 
     document.documentElement.classList.add('camera-preview');
     previewStarted.value = true;
@@ -172,16 +180,19 @@ const waitForPhotoToRender = () => {
 }
 
 const onChangeZoom = (zoom:number) => {
-  CameraPreview.setZoom({zoom: zoom});
+  CameraPreview.setZoom({zoom});
 }
 
-// TODO either fix this so it updates the range slider or remove it
 const onTapZoomOut = () => {
-  currentZoom.value = Math.max(0, currentZoom.value - zoomStep);
+  let zoom = Math.max(MIN_ZOOM, currentZoom.value - zoomStep.value);
+  zoom = Math.round(zoom);
+  currentZoom.value = zoom;
 }
 
 const onTapZoomIn = () => {
-  currentZoom.value = Math.min(maxZoom.value, currentZoom.value + zoomStep);
+  let zoom = Math.min(maxZoom.value, currentZoom.value + zoomStep.value);
+  zoom = Math.round(zoom);
+  currentZoom.value = zoom;
 }
 
 watch(imageSrcData, (value: string) => {
@@ -194,6 +205,14 @@ watch(imageSrcData, (value: string) => {
 watch(currentZoom, (value: number) => {
   console.log('Zoom changed to', value);
   onChangeZoom(value);
+})
+
+watch(maxZoom, (value: number) => {
+  console.log('Max zoom changed to', value);
+})
+
+watch (zoomStep, (value: number) => {
+  console.log('Zoom step changed to', value);
 })
 
 const onRejectPhoto = async () => {
@@ -251,6 +270,7 @@ onMounted(async () => {
               ref="zoomRangeRef"
               aria-label="Camera zoom level"
               :max="maxZoom"
+              :min="MIN_ZOOM"
           >
             <ion-icon @click="onTapZoomOut()" slot="start" :icon="removeCircleOutline" color="primary"></ion-icon>
             <ion-icon @click="onTapZoomIn()" slot="end" :icon="addCircleOutline" color="primary"></ion-icon>
