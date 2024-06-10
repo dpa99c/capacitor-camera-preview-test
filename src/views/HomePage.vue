@@ -9,6 +9,7 @@ const IMAGE_QUALITY = 85;
 const photoSelector = '#photo .image';
 const ZOOM_STEPS = 10;
 const MIN_ZOOM = 1;
+const MAX_ZOOM_LIMIT = 5;
 
 // Refs
 const previewStarted = ref(false)
@@ -95,6 +96,7 @@ const _startCameraPreview = async () => {
     storeToFile: false,
     lockAndroidOrientation: false,
     disableExifHeaderStripping: false,
+    maxZoomLimit: MAX_ZOOM_LIMIT,
   }
 
   try {
@@ -105,8 +107,10 @@ const _startCameraPreview = async () => {
 
     await CameraPreview.start(cameraPreviewOptions);
 
-    const _maxZoom = await CameraPreview.getMaxZoom();
-    maxZoom.value = _maxZoom.value;
+    const _maxZoom = await CameraPreview.getMaxZoom(),
+        deviceMaxZoom = _maxZoom.value;
+    console.log('Device max zoom:', deviceMaxZoom)
+    maxZoom.value = Math.min(deviceMaxZoom, MAX_ZOOM_LIMIT);
 
     zoomStep.value = maxZoom.value / ZOOM_STEPS;
 
