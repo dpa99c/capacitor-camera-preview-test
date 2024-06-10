@@ -206,7 +206,8 @@ watch(imageSrcData, (value: string) => {
   }
 })
 
-watch(currentZoom, (value: number) => {
+watch(currentZoom, (value: number, oldValue:number) => {
+  if(value === oldValue) return;
   console.log('Zoom changed to', value);
   onChangeZoom(value);
 })
@@ -224,8 +225,32 @@ const onRejectPhoto = async () => {
   startCameraPreview();
 }
 
+const onZoomLevelChanged = (event: any) => {
+  const zoom = event.level;
+  if(zoom != undefined){
+    debouncedZoomLevelChange(zoom);
+  }
+
+}
+
+const debounce = (func: (...args: any[]) => void, wait: number) => {
+  let timeout: any;
+  return function(this: any, ...args: any[]) {
+    clearTimeout(timeout);
+    // eslint-disable-next-line prefer-spread
+    timeout = setTimeout(() => func.apply(null, args), wait);
+  }
+}
+
+const zoomLevelChanged = (zoom: number) => {
+  console.log(`zoom changed to: ${zoom}`);
+  currentZoom.value = zoom;
+}
+
+const debouncedZoomLevelChange = debounce(zoomLevelChanged, 100);
 
 onMounted(async () => {
+  (window as any).addEventListener('CameraPreview.zoomLevelChanged', onZoomLevelChanged);
   startCameraPreview();
 
   try{
