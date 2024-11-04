@@ -94,7 +94,7 @@ const _startCameraPreview = async () => {
     enableZoom: true,
     toBack: false,
     storeToFile: false,
-    lockAndroidOrientation: false,
+    lockAndroidOrientation: true,
     disableExifHeaderStripping: false,
     maxZoomLimit: MAX_ZOOM_LIMIT,
   }
