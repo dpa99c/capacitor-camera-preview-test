@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import {onMounted, ref, watch} from "vue";
-import {IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonIcon, IonRange} from '@ionic/vue';
+import {IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonIcon, IonRange, IonToggle} from '@ionic/vue';
 import {CameraPreview, CameraPreviewOptions} from '@capacitor-community/camera-preview';
 import {addCircleOutline, camera, close, refresh, removeCircleOutline} from 'ionicons/icons';
+import {Capacitor} from "@capacitor/core";
 
 // Internal variables
 const IMAGE_QUALITY = 85;
@@ -16,12 +17,13 @@ const previewStarted = ref(false)
 const canTakePhoto = ref(true)
 const cameraText = ref('')
 const cameraTextClass = ref('')
-const imageSrcData = ref('')
+const imgSrc = ref('')
 const imageLoadingHeight = ref(0);
 const maxZoom = ref(0)
 const currentZoom = ref(0)
 const zoomRangeRef = ref()
 const zoomStep = ref();
+const storeToFile = ref(false);
 
 
 const setNoCameraAvailable = (reason: string) => {
@@ -45,18 +47,24 @@ const onPressFlip = async () => {
   }
 }
 
-const onTakePhoto = async (imageSrc: string) => {
-  imageSrcData.value = imageSrc;
+const onTakePhoto = async (newSrc: string) => {
+  imgSrc.value = newSrc;
 }
 
 
 const onPressTakePhoto = async () => {
   try {
-    const base64PictureData = await CameraPreview.capture({
+    const result = await CameraPreview.capture({
       quality: IMAGE_QUALITY
     });
-    const imageSrcData = 'data:image/jpeg;base64,' + base64PictureData.value;
-    await onTakePhoto(imageSrcData)
+    let imgSrc;
+    if(storeToFile.value){
+      imgSrc = Capacitor.convertFileSrc(result.value);
+    }else{
+      imgSrc = 'data:image/jpeg;base64,' + result.value;
+    }
+
+    await onTakePhoto(imgSrc)
     await stopCameraPreview();
   } catch (e: any) {
     const errorMessage = e.message;
@@ -93,7 +101,7 @@ const _startCameraPreview = async () => {
     position: 'rear',
     enableZoom: true,
     toBack: false,
-    storeToFile: false,
+    storeToFile: storeToFile.value,
     lockAndroidOrientation: true,
     disableExifHeaderStripping: false,
     maxZoomLimit: MAX_ZOOM_LIMIT,
@@ -103,19 +111,25 @@ const _startCameraPreview = async () => {
     unsetNoCameraAvailable();
 
     // make sure it's stopped before starting
-    try{await CameraPreview.stop();} catch(e){}
+    try{await CameraPreview.stop();} catch(e){
+      null; // ignore
+    }
 
     await CameraPreview.start(cameraPreviewOptions);
 
-    const _maxZoom = await CameraPreview.getMaxZoom(),
-        deviceMaxZoom = _maxZoom.value;
-    console.log('Device max zoom:', deviceMaxZoom)
-    maxZoom.value = Math.min(deviceMaxZoom, MAX_ZOOM_LIMIT);
+    try{
+      const _maxZoom = await CameraPreview.getMaxZoom(),
+          deviceMaxZoom = _maxZoom.value;
+      console.log('Device max zoom:', deviceMaxZoom)
+      maxZoom.value = Math.min(deviceMaxZoom, MAX_ZOOM_LIMIT);
 
-    zoomStep.value = maxZoom.value / ZOOM_STEPS;
+      zoomStep.value = maxZoom.value / ZOOM_STEPS;
 
-    const _currentZoom = await CameraPreview.getZoom();
-    currentZoom.value = _currentZoom.value;
+      const _currentZoom = await CameraPreview.getZoom();
+      currentZoom.value = _currentZoom.value;
+    }catch (e: any) {
+      console.error(`Error getting camera zoom: ${e.message}`);
+    }
 
     document.documentElement.classList.add('camera-preview');
     previewStarted.value = true;
@@ -184,7 +198,11 @@ const waitForPhotoToRender = () => {
 }
 
 const onChangeZoom = (zoom:number) => {
-  CameraPreview.setZoom({zoom});
+  try {
+    CameraPreview.setZoom({zoom});
+  }catch (e: any) {
+    console.error(`Error setting camera zoom: ${e.message}`);
+  }
 }
 
 const onTapZoomOut = () => {
@@ -199,7 +217,7 @@ const onTapZoomIn = () => {
   currentZoom.value = zoom;
 }
 
-watch(imageSrcData, (value: string) => {
+watch(imgSrc, (value: string) => {
   if (value) {
     imageLoadingHeight.value = 0;
     waitForPhotoToRender();
@@ -221,7 +239,7 @@ watch (zoomStep, (value: number) => {
 })
 
 const onRejectPhoto = async () => {
-  imageSrcData.value = '';
+  imgSrc.value = '';
   startCameraPreview();
 }
 
@@ -246,8 +264,12 @@ const zoomLevelChanged = (zoom: number) => {
   console.log(`zoom changed to: ${zoom}`);
   currentZoom.value = zoom;
 }
-
 const debouncedZoomLevelChange = debounce(zoomLevelChanged, 100);
+
+const onChangeStoreToFile = (value: boolean) => {
+  storeToFile.value = value;
+  imgSrc.value = '';
+}
 
 onMounted(async () => {
   (window as any).addEventListener('CameraPreview.zoomLevelChanged', onZoomLevelChanged);
@@ -279,7 +301,7 @@ onMounted(async () => {
 
       <div class="content-inner">
 
-        <div id="camera" v-if="!imageSrcData">
+        <div id="camera" v-if="!imgSrc">
           <div id="camera-preview" class="image"></div>
 
           <p class="text" v-if="cameraText" v-html="cameraText" :class="cameraTextClass"></p>
@@ -304,12 +326,22 @@ onMounted(async () => {
             <ion-icon @click="onTapZoomOut()" slot="start" :icon="removeCircleOutline" color="primary"></ion-icon>
             <ion-icon @click="onTapZoomIn()" slot="end" :icon="addCircleOutline" color="primary"></ion-icon>
           </ion-range>
+
+          <div class="store-to-file">
+            <ion-toggle
+                :enable-on-off-labels="true"
+                @ionChange="onChangeStoreToFile($event.target.checked)"
+                :checked="storeToFile">
+              Store to file
+            </ion-toggle>
+          </div>
+
         </div>
 
         <div class="photo-layout" v-else>
           <div id="photo">
             <div class="image-container">
-              <img :src="imageSrcData" class="image"/>
+              <img :src="imgSrc" class="image"/>
             </div>
 
             <div class="photo buttons">
@@ -381,6 +413,11 @@ ion-title {
     }
     ion-range{
       padding: 20px;
+    }
+    .store-to-file{
+      width: 100%;
+      display: flex;
+      justify-content: center;
     }
   }
 
